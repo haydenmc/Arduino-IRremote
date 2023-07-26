@@ -1085,6 +1085,58 @@ void timerConfigForSend(uint16_t aFrequencyKHz) {
  **********************************************************************************************************************/
 
 /**********************************************
+ * UNO R4 boards
+ **********************************************/
+#elif defined(ARDUINO_ARCH_RENESAS_UNO)
+#include "FspTimer.h"
+FspTimer  s50usTimer;
+
+// Undefine ISR, because we register/call the plain function IRReceiveTimerInterruptHandler()
+#  if defined(ISR)
+#undef ISR
+#  endif
+
+// callback method used by timer
+void IRTimerInterruptHandlerHelper(timer_callback_args_t __attribute((unused)) *p_args) {
+    IRReceiveTimerInterruptHandler();
+}
+void timerEnableReceiveInterrupt() {
+    s50usTimer.enable_overflow_irq();
+}
+void timerDisableReceiveInterrupt() {
+    s50usTimer.disable_overflow_irq();
+}
+
+void timerConfigForReceive() {
+    uint8_t tTimerType = GPT_TIMER;
+    int8_t tIndex = FspTimer::get_available_timer(tTimerType); // Get first unused channel. Here we need the address of tTimerType
+    if (tIndex < 0 || tTimerType != GPT_TIMER){
+        // here we found no unused GPT channel
+        tIndex = FspTimer::get_available_timer(tTimerType, true); // true to force use of already used PWM channel
+      // If we already get an tIndex < 0 we have an error, but do not know how to handle :-(
+      FspTimer::force_use_of_pwm_reserved_timer(); // enable usage of channel for use in begin()
+    }
+    s50usTimer.begin(TIMER_MODE_PERIODIC, tTimerType, tIndex, MICROS_IN_ONE_SECOND / MICROS_PER_TICK, 0.0, IRTimerInterruptHandlerHelper);
+}
+
+#  if defined(SEND_PWM_BY_TIMER)
+// Not yet implemented
+void enableSendPWMByTimer() {
+}
+void disableSendPWMByTimer() {
+}
+
+/*
+ * timerConfigForSend() is used exclusively by IRsend::enableIROut()
+ */
+void timerConfigForSend(uint16_t aFrequencyKHz) {
+#    if defined(IR_SEND_PIN)
+#    else
+#    endif
+}
+#  endif
+
+/**********************************************
  * Teensy 3.0 / Teensy 3.1 / Teensy 3.2 boards
  **********************************************/
 #elif defined(__MK20DX128__) || defined(__MK20DX256__) || defined(__MK64FX512__) || defined(__MK66FX1M0__)
