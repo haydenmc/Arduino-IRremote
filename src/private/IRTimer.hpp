@@ -85,6 +85,7 @@ void timerConfigForSend(uint16_t aFrequencyKHz);
 //#define __STM32F1__
 //#define STM32F1xx
 //#define PARTICLE
+//#define ARDUINO_ARCH_RENESAS
 
 #if defined (DOXYGEN)
 /**
@@ -1933,6 +1934,60 @@ void timerConfigForSend(uint16_t aFrequencyKHz) {
     ir_out_kHz = aFrequencyKHz;
 }
 #  endif // defined(SEND_PWM_BY_TIMER)
+
+/***************************************
+ * Arduino Uno R4 boards
+ ***************************************/
+#elif defined(ARDUINO_ARCH_RENESAS)
+#include "FspTimer.h"
+FspTimer fspTimer;
+
+#  if defined(SEND_PWM_BY_TIMER)
+#error PWM generation by hardware not implemented for Arduino Uno R4
+#  endif
+
+void fspTimerInterruptHandler(timer_callback_args_t* args) {
+    IRReceiveTimerInterruptHandler();
+}
+
+void timerEnableReceiveInterrupt() {
+    fspTimer.start();
+}
+void timerDisableReceiveInterrupt() {
+    fspTimer.stop();
+}
+
+// Undefine ISR, because we register/call the plain function IRReceiveTimerInterruptHandler()
+#  if defined(ISR)
+#undef ISR
+#  endif
+
+void timerConfigForReceive() {
+    uint8_t timer_type = GPT_TIMER;
+    int8_t tindex = FspTimer::get_available_timer(timer_type);
+    if (tindex < 0) {
+        return;
+    }
+
+    FspTimer::force_use_of_pwm_reserved_timer();
+
+    if(!fspTimer.begin(TIMER_MODE_PERIODIC, timer_type, tindex,
+        (MICROS_IN_ONE_SECOND / MICROS_PER_TICK), 0.0f, fspTimerInterruptHandler)) {
+        return;
+    }
+
+    if (!fspTimer.setup_overflow_irq()) {
+        return;
+    }
+
+    if (!fspTimer.open()) {
+        return;
+    }
+
+    if (!fspTimer.stop()) {
+        return;
+    }
+}
 
 /***************************************
  * Unknown CPU board
